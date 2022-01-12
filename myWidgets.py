@@ -5,6 +5,9 @@ import json
 from jsonpath_ng.ext import parse
 from encryptUserInfo import myEncrypt,readPubKey
 import base64
+from ftplib import FTP       
+import os.path   
+import new_yuyue_client
 
 class QmyReserveForm(QtWidgets.QWidget):
     
@@ -38,25 +41,34 @@ class QmyReserveForm(QtWidgets.QWidget):
         self.__dataSet['reserveTime'] = '07:00'
 
     # 事件处理函数们
+    @QtCore.pyqtSlot()
     def on_tbXueHao_textChanged(self):
         self.__dataSet['xuehao'] = self.ui.tbXueHao.toPlainText()
     
+    @QtCore.pyqtSlot()
     def on_tbEmail_textChanged(self):
         self.__dataSet['email'] = self.ui.tbEmail.toPlainText()
 
+    @QtCore.pyqtSlot()
     def on_tbPassword_textChanged(self):
         self.__dataSet['password'] = self.ui.tbPassword.toPlainText()
 
+    @QtCore.pyqtSlot()
     def on_deReserveDate_userDateChanged(self,qDate):
         self.__dataSet['reserveDate'] = qDate.toPyDate().strftime('%Y-%m-%d')
 
+    @QtCore.pyqtSlot()
     def on_teReserveTime_userTimeChanged(self,qTime):
         self.__dataSet['reserveTime'] = qTime.toPyTime().strftime('%H:%M')
 
+    @QtCore.pyqtSlot()
     def on_btnLogin_clicked(self):
         if (self.__dataSet['xuehao']) and (self.__dataSet['password']):
-            with open('预约关键.json',mode='r',encoding='utf-8') as f:
-                self.__infoJson = json.loads(f.read())
+            raw_json =  new_yuyue_client.login(self.__dataSet['xuehao'],self.__dataSet['password'])
+            if(raw_json):
+                self.__infoJson = raw_json
+            # with open('预约关键.json',mode='r',encoding='utf-8') as f:
+            #     self.__infoJson = json.loads(f.read())
             hallArr_expr = parse('$..list[*].name')
             hallArr = [i.value for i in hallArr_expr.find(self.__infoJson)]
             self.ui.cbbHall.clear()
@@ -92,23 +104,47 @@ class QmyReserveForm(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str)
     def on_cbbFieldNum_currentTextChanged(self,qString):
         self.__dataSet['fieldNum'] = str(qString)
-    
-    def on_btnConfirm_clicked(self):
-        pub_key = readPubKey('./yun_public.pub')
-        encryptedUserInfo = myEncrypt(str(self.__dataSet),public_key=pub_key)
 
-        with open('userInfo.txt','wb') as f:
-            cipher_text_encoded = [base64.b64encode(i)+'\n'.encode() for i in encryptedUserInfo]
-            f.writelines(cipher_text_encoded)
+    @QtCore.pyqtSlot()
+    def on_btnConfirm_clicked(self):
+        # 弹出确认框
+        dialogStrInfo = '真的要创建预约任务吗？'
+        defaultBtn = QtWidgets.QMessageBox.StandardButton.Yes
+        result = QtWidgets.QMessageBox.question(self,'',dialogStrInfo,QtWidgets.QMessageBox.StandardButton.No|defaultBtn)
+
+        if(result==QtWidgets.QMessageBox.StandardButton.Yes):
+            # 加密用户信息并保存到本地
+            pub_key = readPubKey('./yun_public.pub')
+            encryptedUserInfo = myEncrypt(str(self.__dataSet),public_key=pub_key)
+            with open('userInfo.txt','wb') as f:
+                cipher_text_encoded = [base64.b64encode(i)+'\n'.encode() for i in encryptedUserInfo]
+                f.writelines(cipher_text_encoded)
+
+            # 将加密文件上传到 ftp 服务器
+            host = '39.105.232.211'       
+            port = 21              
+            timenout = 30                
+            u = 'ZnRwdXNlcg=='           
+            p = 'MTIzNDU2'          
+            localfile = './userInfo.txt'   #本机要上传的文件与路径
+            # remotepath = '/var/run/vsftpd/AutoReserver'  
+            f = FTP()
+            f.connect(host,port,timenout)  
+            f.login(base64.b64decode(u).decode(),base64.b64decode(p).decode())     
+            print(f.pwd())
+            file = open(localfile,'rb')    
+            f.storbinary('STOR %s' % os.path.basename(localfile),file)  #上传文件到ftp服务器
+            file.close()   #关闭本地文件
+            f.quit()       #退出
+        else:
+            pass
+        
 
 #
 # TODO: 
-#   1.点击确定按钮后要弹出确认框
-#   2.确认后把用户输入信息加密并保存到本地
+#   1.点击确定按钮后要弹出确认框 Done
+#   2.确认后把用户输入信息加密并保存到本地 Done
 #   
-#   3～4 在 shell 脚本完成
-#   3.连接服务器，上传加密后的用户信息
-#   4.创建定时任务
-#   
-#   5.完善运行信息框，显示软件运行情况
+#   3.连接服务器，上传加密后的用户信息 Done
+#   4.完善运行信息框，显示软件运行情况
 #        
