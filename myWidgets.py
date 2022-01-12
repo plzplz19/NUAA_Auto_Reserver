@@ -3,6 +3,8 @@ from ui_ReserveForm import Ui_ReserveForm
 import datetime
 import json
 from jsonpath_ng.ext import parse
+from encryptUserInfo import myEncrypt,readPubKey
+import base64
 
 class QmyReserveForm(QtWidgets.QWidget):
     
@@ -91,3 +93,22 @@ class QmyReserveForm(QtWidgets.QWidget):
     def on_cbbFieldNum_currentTextChanged(self,qString):
         self.__dataSet['fieldNum'] = str(qString)
     
+    def on_btnConfirm_clicked(self):
+        pub_key = readPubKey('./yun_public.pub')
+        encryptedUserInfo = myEncrypt(str(self.__dataSet),public_key=pub_key)
+
+        with open('userInfo.txt','wb') as f:
+            cipher_text_encoded = [base64.b64encode(i)+'\n'.encode() for i in encryptedUserInfo]
+            f.writelines(cipher_text_encoded)
+
+#
+# TODO: 
+#   1.点击确定按钮后要弹出确认框
+#   2.确认后把用户输入信息加密并保存到本地
+#   
+#   3～4 在 shell 脚本完成
+#   3.连接服务器，上传加密后的用户信息
+#   4.创建定时任务
+#   
+#   5.完善运行信息框，显示软件运行情况
+#        
